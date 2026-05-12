@@ -351,8 +351,9 @@ export class UpupChatRuntime implements ChatRuntime {
           const foundPath = this.findUpupAgentPath();
           console.log('[UpupChatRuntime] foundPath:', foundPath);
           if (foundPath) {
-            command = 'node';
-            args = [foundPath];
+            // Use bun to run the TypeScript file
+            command = 'bun';
+            args = ['run', foundPath];
           } else {
             // Create bundled agent and use it
             console.log('[UpupChatRuntime] creating bundled agent...');
@@ -433,11 +434,24 @@ export class UpupChatRuntime implements ChatRuntime {
 
   /**
    * Find upup-agent CLI location.
-   * Always returns null to force bundled agent creation (ensures latest version).
+   * Uses the actual upup-agent from the dexer workspace if available.
    */
   private findUpupAgentPath(): string | null {
-    // Always return null to force fresh bundled agent creation
-    // This ensures we always have the latest version
+    // Try to find the actual upup-agent CLI
+    const possiblePaths = [
+      '/Users/louloulin/Documents/linchong/touzhi/dexter/node_modules/.bin/upup-agent',
+      '/Users/louloulin/Documents/linchong/touzhi/dexter/upup-agent/src/cli.ts',
+    ];
+
+    for (const p of possiblePaths) {
+      try {
+        if (fs.existsSync(p)) {
+          return p;
+        }
+      } catch {
+        // Ignore
+      }
+    }
     return null;
   }
 
