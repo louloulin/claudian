@@ -341,7 +341,7 @@ export class UpupChatRuntime implements ChatRuntime {
         let command: string;
         let args: string[];
 
-        if (settings.cliPath && settings.cliPath !== 'bun' && settings.cliPath !== 'npx' && settings.cliPath !== '') {
+        if (settings.cliPath && settings.cliPath !== 'bun' && settings.cliPath !== 'npx' && settings.cliPath !== 'auto' && settings.cliPath !== '') {
           // Use custom path
           console.log('[UpupChatRuntime] using custom cliPath:', settings.cliPath);
           command = settings.cliPath;
@@ -465,18 +465,28 @@ export class UpupChatRuntime implements ChatRuntime {
 
   /**
    * Find upup-agent CLI source location.
-   * Looks in common locations for the TypeScript source.
+   * Searches in configurable locations without hardcoding.
    */
   private findUpupAgentPath(): string | null {
-    // Search paths for upup-agent source
+    // Check environment variable first
+    const envPath = process.env.UPUP_AGENT_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+      console.log('[UpupChatRuntime] Using UPUP_AGENT_PATH:', envPath);
+      return envPath;
+    }
+
+    // Search relative to home directory
+    const home = process.env.HOME || '';
     const searchPaths = [
-      '/Users/louloulin/Documents/linchong/touzhi/dexter/upup-agent/src/cli.ts',
-      path.join(process.env.HOME || '', 'touzhi/dexter/upup-agent/src/cli.ts'),
-      path.join(process.env.HOME || '', 'dexter/upup-agent/src/cli.ts'),
+      path.join(home, 'touzhi/dexter/upup-agent/src/cli.ts'),
+      path.join(home, 'Documents/touzhi/dexter/upup-agent/src/cli.ts'),
+      path.join(home, 'dexter/upup-agent/src/cli.ts'),
+      path.join(home, 'projects/touzhi/dexter/upup-agent/src/cli.ts'),
     ];
 
     for (const p of searchPaths) {
-      if (p && fs.existsSync(p)) {
+      if (fs.existsSync(p)) {
+        console.log('[UpupChatRuntime] Found upup-agent at:', p);
         return p;
       }
     }
@@ -487,8 +497,15 @@ export class UpupChatRuntime implements ChatRuntime {
    * Find bun executable path.
    */
   private findBunPath(): string {
+    // Check environment variable first
+    const envPath = process.env.BUN_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+      return envPath;
+    }
+
     const bunPaths = [
-      '/Users/louloulin/.bun/bin/bun',
+      path.join(process.env.HOME || '', '.bun/bin/bun'),
+      '/opt/homebrew/bin/bun',
       '/usr/local/bin/bun',
       path.join(process.env.HOME || '', '.bun/bin/bun'),
     ];

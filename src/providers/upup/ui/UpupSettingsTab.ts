@@ -39,14 +39,14 @@ export const upupSettingsTabRenderer: ProviderSettingsTabRenderer = {
     // --- CLI Path ---
 
     new Setting(container)
-      .setName('CLI path')
-      .setDesc('Path to the upup CLI. Use "bun" for local development or provide custom path.')
+      .setName('upup-agent CLI path')
+      .setDesc('Path to upup-agent TypeScript source. Set UPUP_AGENT_PATH env var or use auto-detect.')
       .addText((text) =>
         text
-          .setPlaceholder('bun')
-          .setValue(upupSettings.cliPath)
+          .setPlaceholder('auto-detect')
+          .setValue(upupSettings.cliPath || '')
           .onChange(async (value) => {
-            updateUpupProviderSettings(settingsBag, { cliPath: value || 'bun' });
+            updateUpupProviderSettings(settingsBag, { cliPath: value || 'auto' });
             await context.plugin.saveSettings();
           })
       );

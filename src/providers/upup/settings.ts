@@ -45,7 +45,7 @@ export const DEFAULT_UPUP_PROVIDER_SETTINGS: UpupProviderSettings = {
   environmentVariables: {},
   defaultAgentId: 'research-analyst',
   mcpServers: [],
-  cliPath: 'bun',
+  cliPath: 'auto',
   loadUserSettings: false,
 };
 
