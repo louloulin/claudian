@@ -499,7 +499,7 @@ function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\\n');
 }
 
-function handleMessage(msg) {
+async function handleMessage(msg) {
   // Handle both raw strings and parsed objects
   let parsed;
   if (typeof msg === 'string') {
