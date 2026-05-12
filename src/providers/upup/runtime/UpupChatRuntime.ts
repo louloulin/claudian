@@ -352,8 +352,38 @@ export class UpupChatRuntime implements ChatRuntime {
           console.log('[UpupChatRuntime] foundPath:', foundPath);
           if (foundPath) {
             // Use bun to run the TypeScript file
-            command = 'bun';
+            command = this.findBunPath();
             args = ['run', foundPath];
+
+            // Build environment with API keys from settings
+            const env: Record<string, string> = {
+              ...process.env,
+              PATH: enhancedPath,
+            };
+
+            // Read API keys from provider environment variables (stored as text in settings)
+            const providerEnvText = getProviderEnvironmentVariables(this.plugin.settings as unknown as Record<string, unknown>, 'upup');
+            const envVars = parseEnvironmentVariables(providerEnvText);
+            for (const [key, value] of Object.entries(envVars)) {
+              env[key] = value;
+            }
+            console.log('[UpupChatRuntime] Environment vars loaded:', Object.keys(envVars).filter(k => k.includes('API_KEY') || k.includes('BASE_URL')).join(', ') || 'none');
+
+            // Use dexter directory as cwd
+            const processCwd = path.dirname(path.dirname(path.dirname(foundPath)));
+            console.log('[UpupChatRuntime] using real upup-agent from:', processCwd);
+
+            this.client = new UpupStdioClient();
+            await this.client.connect(command, args, {
+              env,
+              cwd: processCwd || undefined,
+            });
+
+            console.log('[UpupChatRuntime] connection successful!');
+            this.sessionId = `upup-${Date.now()}`;
+            this.readyState = true;
+            this.reconnectAttempts = 0;
+            return true;
           } else {
             // Create bundled agent and use it
             console.log('[UpupChatRuntime] creating bundled agent...');
@@ -361,40 +391,41 @@ export class UpupChatRuntime implements ChatRuntime {
             console.log('[UpupChatRuntime] bundledPath:', bundledPath);
             command = 'node';
             args = [bundledPath];
+
+            // Continue for bundled agent path
+            console.log('[UpupChatRuntime] spawning:', command, args.join(' '));
+
+            // Build environment with API keys from settings
+            const env: Record<string, string> = {
+              ...process.env,
+              PATH: enhancedPath,
+            };
+
+            // Read API keys from provider environment variables (stored as text in settings)
+            const providerEnvText = getProviderEnvironmentVariables(this.plugin.settings as unknown as Record<string, unknown>, 'upup');
+            const envVars = parseEnvironmentVariables(providerEnvText);
+
+            // Add parsed environment variables to env
+            for (const [key, value] of Object.entries(envVars)) {
+              env[key] = value;
+            }
+
+            console.log('[UpupChatRuntime] Environment vars loaded:', Object.keys(envVars).filter(k => k.includes('API_KEY') || k.includes('BASE_URL')).join(', ') || 'none');
+
+            this.client = new UpupStdioClient();
+            await this.client.connect(command, args, {
+              env,
+              cwd: vaultPath || undefined,
+            });
+
+            console.log('[UpupChatRuntime] connection successful!');
+            // Generate new session ID on reconnection
+            this.sessionId = `upup-${Date.now()}`;
+            this.readyState = true;
+            this.reconnectAttempts = 0;
+            return true;
           }
         }
-
-        console.log('[UpupChatRuntime] spawning:', command, args.join(' '));
-
-        // Build environment with API keys from settings
-        const env: Record<string, string> = {
-          ...process.env,
-          PATH: enhancedPath,
-        };
-
-        // Read API keys from provider environment variables (stored as text in settings)
-        const providerEnvText = getProviderEnvironmentVariables(this.plugin.settings as unknown as Record<string, unknown>, 'upup');
-        const envVars = parseEnvironmentVariables(providerEnvText);
-
-        // Add parsed environment variables to env
-        for (const [key, value] of Object.entries(envVars)) {
-          env[key] = value;
-        }
-
-        console.log('[UpupChatRuntime] Environment vars loaded:', Object.keys(envVars).filter(k => k.includes('API_KEY') || k.includes('BASE_URL')).join(', ') || 'none');
-
-        this.client = new UpupStdioClient();
-        await this.client.connect(command, args, {
-          env,
-          cwd: vaultPath || undefined,
-        });
-
-        console.log('[UpupChatRuntime] connection successful!');
-        // Generate new session ID on reconnection
-        this.sessionId = `upup-${Date.now()}`;
-        this.readyState = true;
-        this.reconnectAttempts = 0;
-        return true;
       } catch (err) {
         console.error(`[UpupChatRuntime] Connection attempt ${attempt + 1} failed:`, err);
         this.reconnectAttempts++;
@@ -433,26 +464,41 @@ export class UpupChatRuntime implements ChatRuntime {
   }
 
   /**
-   * Find upup-agent CLI location.
-   * Uses the actual upup-agent from the dexer workspace if available.
+   * Find upup-agent CLI source location.
+   * Looks in common locations for the TypeScript source.
    */
   private findUpupAgentPath(): string | null {
-    // Try to find the actual upup-agent CLI
-    const possiblePaths = [
-      '/Users/louloulin/Documents/linchong/touzhi/dexter/node_modules/.bin/upup-agent',
+    // Search paths for upup-agent source
+    const searchPaths = [
       '/Users/louloulin/Documents/linchong/touzhi/dexter/upup-agent/src/cli.ts',
+      path.join(process.env.HOME || '', 'touzhi/dexter/upup-agent/src/cli.ts'),
+      path.join(process.env.HOME || '', 'dexter/upup-agent/src/cli.ts'),
     ];
 
-    for (const p of possiblePaths) {
-      try {
-        if (fs.existsSync(p)) {
-          return p;
-        }
-      } catch {
-        // Ignore
+    for (const p of searchPaths) {
+      if (p && fs.existsSync(p)) {
+        return p;
       }
     }
     return null;
+  }
+
+  /**
+   * Find bun executable path.
+   */
+  private findBunPath(): string {
+    const bunPaths = [
+      '/Users/louloulin/.bun/bin/bun',
+      '/usr/local/bin/bun',
+      path.join(process.env.HOME || '', '.bun/bin/bun'),
+    ];
+
+    for (const p of bunPaths) {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+    return 'bun'; // Fallback to PATH lookup
   }
 
   /**

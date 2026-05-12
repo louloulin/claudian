@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "id": "session_35ad1d4cbb3d9ec4",
+    "createdAt": "2026-05-12T09:30:09.898Z",
+    "updatedAt": "2026-05-12T09:30:09.898Z",
+    "queryCount": 1,
+    "totalIterations": 0,
+    "totalTokens": 0
+  },
+  "approvedTools": [],
+  "deniedTools": [],
+  "toolCallCounts": {}
+}
