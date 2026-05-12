@@ -3,11 +3,9 @@
  * Tests for upup settings reconciler
  */
 
-import { describe, expect,it } from 'vitest'
-
-import type { Conversation } from '../../../../../src/core/types/chat.js'
+import type { Conversation } from '../../../../../src/core/types/chat'
 // Import the actual module
-import { upupSettingsReconciler } from '../../../../../src/providers/upup/env/UpupSettingsReconciler.js'
+import { upupSettingsReconciler } from '../../../../../src/providers/upup/env/UpupSettingsReconciler'
 
 // Helper function to simulate env hash computation (mirrors implementation)
 function computeEnvHash(envText: string): string {

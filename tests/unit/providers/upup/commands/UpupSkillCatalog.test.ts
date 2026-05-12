@@ -3,20 +3,18 @@
  * Tests for upup skill catalog
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { UpupSkillCatalog } from '../../../../../src/providers/upup/commands/UpupSkillCatalog.js'
+import { UpupSkillCatalog } from '../../../../../src/providers/upup/commands/UpupSkillCatalog'
 
 // Mock fs module
-vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  readdirSync: vi.fn(),
-  readFileSync: vi.fn(),
+jest.mock('fs', () => ({
+  existsSync: jest.fn(),
+  readdirSync: jest.fn(),
+  readFileSync: jest.fn(),
 }))
 
 describe('UpupSkillCatalog', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
   })
 
   describe('constructor', () => {
@@ -32,11 +30,11 @@ describe('UpupSkillCatalog', () => {
       const { existsSync, readdirSync, readFileSync } = await import('fs')
 
       // Mock file system
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readdirSync).mockReturnValue([
+      jest.mocked(existsSync).mockReturnValue(true)
+      jest.mocked(readdirSync).mockReturnValue([
         { isDirectory: () => true, name: 'my-skill' },
       ] as any)
-      vi.mocked(readFileSync).mockReturnValue(`
+      jest.mocked(readFileSync).mockReturnValue(`
 ---
 name: my-skill
 description: A test skill
@@ -59,7 +57,7 @@ This skill does something.
 
     it('should skip paths that do not exist', async () => {
       const { existsSync } = await import('fs')
-      vi.mocked(existsSync).mockReturnValue(false)
+      jest.mocked(existsSync).mockReturnValue(false)
 
       const catalog = new UpupSkillCatalog(['/non/existent/path'])
       await catalog.refresh()
@@ -72,11 +70,11 @@ This skill does something.
     it('should skip invalid skill files', async () => {
       const { existsSync, readdirSync, readFileSync } = await import('fs')
 
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readdirSync).mockReturnValue([
+      jest.mocked(existsSync).mockReturnValue(true)
+      jest.mocked(readdirSync).mockReturnValue([
         { isDirectory: () => true, name: 'bad-skill' },
       ] as any)
-      vi.mocked(readFileSync).mockReturnValue('invalid content without proper frontmatter')
+      jest.mocked(readFileSync).mockReturnValue('invalid content without proper frontmatter')
 
       const catalog = new UpupSkillCatalog(['/path/to/skills'])
       await catalog.refresh()
@@ -112,11 +110,11 @@ This skill does something.
     it('should filter out non-user-invocable skills', async () => {
       const { existsSync, readdirSync, readFileSync } = await import('fs')
 
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readdirSync).mockReturnValue([
+      jest.mocked(existsSync).mockReturnValue(true)
+      jest.mocked(readdirSync).mockReturnValue([
         { isDirectory: () => true, name: 'internal-skill' },
       ] as any)
-      vi.mocked(readFileSync).mockReturnValue(`
+      jest.mocked(readFileSync).mockReturnValue(`
 ---
 name: internal-skill
 description: An internal skill
@@ -138,12 +136,12 @@ This skill is not for user invocation.
     it('should return project and user skills', async () => {
       const { existsSync, readdirSync, readFileSync } = await import('fs')
 
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readdirSync).mockReturnValue([
+      jest.mocked(existsSync).mockReturnValue(true)
+      jest.mocked(readdirSync).mockReturnValue([
         { isDirectory: () => true, name: 'project-skill' },
       ] as any)
 
-      vi.mocked(readFileSync).mockReturnValue(`
+      jest.mocked(readFileSync).mockReturnValue(`
 ---
 name: project-skill
 description: Project skill
@@ -248,11 +246,11 @@ Project skill content.
     it('should parse skill with all fields', async () => {
       const { existsSync, readdirSync, readFileSync } = await import('fs')
 
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readdirSync).mockReturnValue([
+      jest.mocked(existsSync).mockReturnValue(true)
+      jest.mocked(readdirSync).mockReturnValue([
         { isDirectory: () => true, name: 'full-skill' },
       ] as any)
-      vi.mocked(readFileSync).mockReturnValue(`
+      jest.mocked(readFileSync).mockReturnValue(`
 ---
 name: full-skill
 description: A skill with all fields
@@ -278,11 +276,11 @@ Full skill content here.
     it('should use defaults for missing optional fields', async () => {
       const { existsSync, readdirSync, readFileSync } = await import('fs')
 
-      vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readdirSync).mockReturnValue([
+      jest.mocked(existsSync).mockReturnValue(true)
+      jest.mocked(readdirSync).mockReturnValue([
         { isDirectory: () => true, name: 'minimal-skill' },
       ] as any)
-      vi.mocked(readFileSync).mockReturnValue(`
+      jest.mocked(readFileSync).mockReturnValue(`
 ---
 name: minimal-skill
 description: A minimal skill

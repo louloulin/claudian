@@ -39,6 +39,7 @@ export interface TransformStreamState {
   currentToolId: string;
   accumulatedInput: string;
   partialJson: Record<string, unknown>;
+  accumulatedText: string;
 }
 
 export interface TransformOptions {
@@ -51,6 +52,7 @@ function createStreamState(): TransformStreamState {
     currentToolId: '',
     accumulatedInput: '',
     partialJson: {},
+    accumulatedText: '',
   };
 }
 
@@ -58,6 +60,7 @@ function resetStreamState(state: TransformStreamState): void {
   state.currentToolId = '';
   state.accumulatedInput = '';
   state.partialJson = {};
+  state.accumulatedText = '';
 }
 
 function safeJsonParse(text: string): unknown | null {

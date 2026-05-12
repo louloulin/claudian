@@ -3,10 +3,8 @@
  * Tests for upup event transformation
  */
 
-import { describe, expect, it } from 'vitest'
-
-import type { TransformStreamState } from '../../../../../src/providers/upup/stream/transformUpupEvent.js'
-import { transformUpupEvent } from '../../../../../src/providers/upup/stream/transformUpupEvent.js'
+import type { TransformStreamState } from '../../../../../src/providers/upup/stream/transformUpupEvent'
+import { transformUpupEvent } from '../../../../../src/providers/upup/stream/transformUpupEvent'
 
 // Helper functions to create test state (matching implementation)
 function createStreamState(): TransformStreamState {
@@ -14,6 +12,7 @@ function createStreamState(): TransformStreamState {
     currentToolId: '',
     accumulatedInput: '',
     partialJson: {},
+    accumulatedText: '',
   }
 }
 
@@ -21,6 +20,7 @@ function resetStreamState(state: TransformStreamState): void {
   state.currentToolId = ''
   state.accumulatedInput = ''
   state.partialJson = {}
+  state.accumulatedText = ''
 }
 
 function safeJsonParse(text: string): unknown | null {
@@ -409,6 +409,7 @@ describe('createStreamState', () => {
       currentToolId: '',
       accumulatedInput: '',
       partialJson: {},
+      accumulatedText: '',
     })
   })
 })
@@ -419,6 +420,7 @@ describe('resetStreamState', () => {
       currentToolId: 'tool-123',
       accumulatedInput: 'some input',
       partialJson: { key: 'value' },
+      accumulatedText: 'some text',
     }
 
     resetStreamState(state)
@@ -427,6 +429,7 @@ describe('resetStreamState', () => {
       currentToolId: '',
       accumulatedInput: '',
       partialJson: {},
+      accumulatedText: '',
     })
   })
 })
