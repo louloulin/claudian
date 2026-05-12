@@ -28,14 +28,14 @@ export interface UpupProviderSettings {
 
 export const DEFAULT_UPUP_PROVIDER_SETTINGS: UpupProviderSettings = {
   enabled: true,
-  model: 'gpt-4o',
-  provider: 'openai',
+  model: 'deepseek-v4-flash',
+  provider: 'deepseek',
   enabledProviders: {
-    openai: true,
-    anthropic: true,
+    openai: false,
+    anthropic: false,
     google: false,
     xai: false,
-    deepseek: false,
+    deepseek: true,
     ollama: false,
     openrouter: false,
     moonshot: false,
