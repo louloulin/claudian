@@ -4,6 +4,7 @@ import * as path from 'path';
 import { createInterface } from 'readline';
 import type { Readable, Writable } from 'stream';
 
+import { getProviderEnvironmentVariables } from '../../../core/providers/providerEnvironment';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type {
   ApprovalCallback,
@@ -28,6 +29,7 @@ import type {
 } from '../../../core/types';
 import type ClaudianPlugin from '../../../main';
 import { getEnhancedPath } from '../../../utils/env';
+import { parseEnvironmentVariables } from '../../../utils/env';
 import { getVaultPath } from '../../../utils/path';
 import { UPUP_PROVIDER_CAPABILITIES } from '../capabilities';
 import { getUpupProviderSettings } from '../settings';
@@ -369,33 +371,16 @@ export class UpupChatRuntime implements ChatRuntime {
           PATH: enhancedPath,
         };
 
-        // Add API keys from settings
-        if (settings.apiKeys) {
-          if (settings.apiKeys.deepseek) {
-            env.DEEPSEEK_API_KEY = settings.apiKeys.deepseek;
-          }
-          if (settings.apiKeys.openai) {
-            env.OPENAI_API_KEY = settings.apiKeys.openai;
-          }
-          if (settings.apiKeys.anthropic) {
-            env.ANTHROPIC_API_KEY = settings.apiKeys.anthropic;
-          }
-          if (settings.apiKeys.google) {
-            env.GOOGLE_API_KEY = settings.apiKeys.google;
-          }
+        // Read API keys from provider environment variables (stored as text in settings)
+        const providerEnvText = getProviderEnvironmentVariables(this.plugin.settings as unknown as Record<string, unknown>, 'upup');
+        const envVars = parseEnvironmentVariables(providerEnvText);
+
+        // Add parsed environment variables to env
+        for (const [key, value] of Object.entries(envVars)) {
+          env[key] = value;
         }
 
-        // Add API base URLs
-        if (settings.apiBases) {
-          if (settings.apiBases.deepseek) {
-            env.DEEPSEEK_BASE_URL = settings.apiBases.deepseek;
-          }
-          if (settings.apiBases.openai) {
-            env.OPENAI_BASE_URL = settings.apiBases.openai;
-          }
-        }
-
-        console.log('[UpupChatRuntime] API keys loaded:', Object.keys(env).filter(k => k.includes('API_KEY')).join(', '));
+        console.log('[UpupChatRuntime] Environment vars loaded:', Object.keys(envVars).filter(k => k.includes('API_KEY') || k.includes('BASE_URL')).join(', ') || 'none');
 
         this.client = new UpupStdioClient();
         await this.client.connect(command, args, {
