@@ -1,0 +1,320 @@
+/**
+ * Minimal Upup Stdio Server - Bundled Version
+ *
+ * A lightweight stdio server that provides LLM agent capabilities
+ * using only @upup/llm for LLM calls.
+ *
+ * This is a simplified version that:
+ * - Direct LLM calls (no complex agent loop)
+ * - Basic streaming support
+ * - Simple tool framework (Bash, Read, Edit)
+ *
+ * NOTE: This file is NOT actively used. The bundled agent is embedded
+ * directly in UpupChatRuntime.ts via getBundledAgentCode().
+ */
+
+// import { createClient, PROVIDERS, type LlmClient, type LlmMessage } from '@upup/llm';
+// import type { AgentEvent, RunParams, StreamEvent } from '@upup/types';
+
+// ============ JSON-RPC Types ============
+
+interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: number;
+  method: string;
+  params?: Record<string, unknown>;
+}
+
+interface JsonRpcResponse {
+  jsonrpc: '2.0';
+  id: number;
+  result?: unknown;
+  error?: { code: number; message: string; data?: unknown };
+}
+
+interface JsonRpcNotification {
+  jsonrpc: '2.0';
+  method: string;
+  params?: Record<string, unknown>;
+}
+
+// ============ Minimal Tool System ============
+
+interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+interface ToolResult {
+  success: boolean;
+  content: string;
+  error?: string;
+}
+
+type ToolHandler = (args: Record<string, unknown>) => Promise<ToolResult>;
+
+// Built-in tools
+const builtInTools: Record<string, ToolDefinition> = {
+  bash: {
+    name: 'bash',
+    description: 'Execute a bash command',
+    inputSchema: { command: { type: 'string' } },
+  },
+  read: {
+    name: 'read',
+    description: 'Read file contents',
+    inputSchema: { path: { type: 'string' } },
+  },
+  edit: {
+    name: 'edit',
+    description: 'Edit file contents',
+    inputSchema: { path: { type: 'string' }, old: { type: 'string' }, new: { type: 'string' } },
+  },
+};
+
+// Tool handlers (simplified - just return mock results for now)
+const toolHandlers: Record<string, ToolHandler> = {
+  bash: async (args) => {
+    const { command } = args as { command: string };
+    // In full implementation, this would actually execute the command
+    return { success: true, content: `[Simulated] Command executed: ${command}` };
+  },
+  read: async (args) => {
+    const { path } = args as { path: string };
+    return { success: true, content: `[Simulated] File contents for: ${path}` };
+  },
+  edit: async (args) => {
+    const { path, old: _old, new: _new } = args as { path: string; old: string; new: string };
+    return { success: true, content: `[Simulated] Edited: ${path}` };
+  },
+};
+
+// ============ Agent Implementation ============
+
+class MinimalAgent {
+  private llmClient: LlmClient;
+  private tools: Map<string, ToolHandler> = new Map();
+
+  constructor(model?: string) {
+    // Default to deepseek if available, otherwise openai
+    const defaultModel = model || process.env.DEFAULT_MODEL || 'deepseek-v4';
+    this.llmClient = createClient({ model: defaultModel });
+
+    // Register built-in tools
+    for (const [name, handler] of Object.entries(toolHandlers)) {
+      this.tools.set(name, handler);
+    }
+  }
+
+  registerTool(name: string, handler: ToolHandler): void {
+    this.tools.set(name, handler);
+  }
+
+  async *run(params: RunParams): AsyncGenerator<AgentEvent, void, unknown> {
+    const messages: LlmMessage[] = [
+      { role: 'system', content: 'You are a helpful AI assistant.' },
+    ];
+
+    // Add conversation history
+    if (params.messages) {
+      for (const msg of params.messages) {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          messages.push({ role: msg.role, content: msg.content });
+        }
+      }
+    }
+
+    // Add user query
+    const query = params.query || params.messages?.find(m => m.role === 'user')?.content || 'Hello';
+    messages.push({ role: 'user', content: query });
+
+    yield { type: 'message_start' };
+
+    // For now, just make a simple LLM call
+    try {
+      const response = await this.llmClient.complete({ messages });
+
+      yield { type: 'thinking', message: '' };
+
+      for (const chunk of response.choices) {
+        if (chunk.delta?.content) {
+          yield { type: 'stream_progress', charDelta: chunk.delta.content.length, mode: 'responding' };
+        }
+      }
+
+      const answer = response.choices[0]?.message?.content || 'No response';
+      yield { type: 'done', answer, toolCalls: [], iterations: 1, totalTime: 0 };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      yield { type: 'done', answer: `Error: ${errorMessage}`, toolCalls: [], iterations: 0, totalTime: 0 };
+    }
+  }
+}
+
+// ============ Stdio Server ============
+
+class StdioServer {
+  private agent: MinimalAgent | null = null;
+  private running = true;
+
+  start(): void {
+    let buffer = '';
+    process.stdin.setEncoding('utf-8');
+
+    process.stdin.on('data', (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            const msg = JSON.parse(line) as JsonRpcRequest | JsonRpcNotification;
+            this.handleMessage(msg);
+          } catch (err) {
+            console.error('[parse error]', err);
+          }
+        }
+      }
+    });
+
+    process.stdin.on('end', () => {
+      this.running = false;
+    });
+
+    console.error('[upup-agent] Minimal stdio server started');
+  }
+
+  private send(msg: unknown): void {
+    console.log(JSON.stringify(msg));
+  }
+
+  private convertEvent(event: AgentEvent): StreamEvent | null {
+    switch (event.type) {
+      case 'message_start':
+        return { type: 'message_start' };
+      case 'thinking':
+        return { type: 'thinking', data: { content: event.message } };
+      case 'stream_progress':
+        return { type: 'content_delta', data: { content: '█' } }; // Placeholder
+      case 'done':
+        return { type: 'done', data: { output: event.answer, done: true } };
+      default:
+        return null;
+    }
+  }
+
+  private async handleMessage(msg: JsonRpcRequest | JsonRpcNotification): Promise<void> {
+    const { method, params, id } = msg as JsonRpcRequest;
+
+    try {
+      switch (method) {
+        case 'initialize': {
+          this.send({
+            jsonrpc: '2.0',
+            id,
+            result: {
+              version: '1.0.0',
+              capabilities: { streaming: true, tools: true },
+              agentName: 'upup-agent-minimal',
+            },
+          } as JsonRpcResponse);
+          break;
+        }
+
+        case 'stream': {
+          const runParams = params as { messages?: Array<{ role: string; content: string }>; model?: string; query?: string };
+          const query = runParams.query || runParams.messages?.find(m => m.role === 'user')?.content || 'Hello';
+
+          // Create agent if not exists
+          if (!this.agent) {
+            this.agent = new MinimalAgent(runParams.model);
+          }
+
+          // Send start event
+          this.send({
+            jsonrpc: '2.0',
+            method: 'event',
+            params: { type: 'message_start', data: {} },
+          } as JsonRpcNotification);
+
+          let finalOutput = '';
+
+          try {
+            for await (const event of this.agent.run({ query, messages: runParams.messages || [] })) {
+              const streamEvent = this.convertEvent(event);
+              if (streamEvent) {
+                this.send({
+                  jsonrpc: '2.0',
+                  method: 'event',
+                  params: streamEvent,
+                } as JsonRpcNotification);
+              }
+
+              if (event.type === 'done') {
+                finalOutput = event.answer;
+              }
+            }
+          } catch (err) {
+            finalOutput = `Error: ${err instanceof Error ? err.message : String(err)}`;
+          }
+
+          // Send done
+          this.send({
+            jsonrpc: '2.0',
+            method: 'event',
+            params: { type: 'done', data: { done: true, output: finalOutput } },
+          } as JsonRpcNotification);
+
+          this.send({
+            jsonrpc: '2.0',
+            method: 'stream_done',
+            params: { done: true },
+          } as JsonRpcNotification);
+
+          // Send response
+          this.send({
+            jsonrpc: '2.0',
+            id,
+            result: { output: finalOutput, toolCalls: 0, runId: `run-${Date.now()}` },
+          } as JsonRpcResponse);
+          break;
+        }
+
+        case 'shutdown': {
+          this.send({
+            jsonrpc: '2.0',
+            id,
+            result: { shutdown: true },
+          } as JsonRpcResponse);
+          process.exit(0);
+        }
+
+        default:
+          if ('id' in msg) {
+            this.send({
+              jsonrpc: '2.0',
+              id,
+              error: { code: -32601, message: `Method not found: ${method}` },
+            } as JsonRpcResponse);
+          }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('[handler error]', errorMessage);
+      if ('id' in msg) {
+        this.send({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: errorMessage },
+        } as JsonRpcResponse);
+      }
+    }
+  }
+}
+
+// Start server
+const server = new StdioServer();
+server.start();
