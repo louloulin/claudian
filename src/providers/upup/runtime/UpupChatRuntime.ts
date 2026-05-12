@@ -303,24 +303,41 @@ class UpupTransport {
     // Extract prompt from messages
     const prompt = params.messages.find(m => m.role === 'user')?.content || 'Hello';
 
-    // Collect events
-    const events: ServerEvent[] = [];
+    // Real-time streaming: yield events immediately as they arrive
+    const eventQueue: ServerEvent[] = [];
+    let streamDone = false;
     let hasError = false;
     let errorMessage = '';
+    let resolveNext: ((value: ServerEvent | null) => void) | null = null;
 
     // Register handlers BEFORE sending request to avoid race condition
     const eventHandler = (event: unknown) => {
       const e = event as ServerEvent;
       console.log('[UpupTransport] event collected:', e.type, JSON.stringify(e).slice(0, 150));
-      events.push(e);
+
+      if (resolveNext) {
+        // Immediate consumer waiting - resolve immediately
+        const resolve = resolveNext;
+        resolveNext = null;
+        resolve(e);
+      } else {
+        // Buffer the event
+        eventQueue.push(e);
+      }
     };
 
     const doneHandler = (data: unknown) => {
       const d = data as Record<string, unknown>;
       console.log('[UpupTransport] stream_done received:', JSON.stringify(d));
       if (d.done === true) {
+        streamDone = true;
         this.off('stream_done', doneHandler);
-        resolveStream();
+        // Resolve any pending consumer with null to signal end
+        if (resolveNext) {
+          const resolve = resolveNext;
+          resolveNext = null;
+          resolve(null);
+        }
       }
     };
 
@@ -345,20 +362,28 @@ class UpupTransport {
       throw err;
     }
 
-    // Wait for stream to complete
-    let resolveStream: () => void;
-    const streamPromise = new Promise<void>((resolve) => {
-      resolveStream = resolve;
-    });
+    // Yield events in real-time as they arrive
+    while (!streamDone) {
+      if (eventQueue.length > 0) {
+        // Yield buffered event immediately
+        yield eventQueue.shift()!;
+      } else {
+        // Wait for next event
+        const nextEvent = await new Promise<ServerEvent | null>((resolve) => {
+          resolveNext = resolve;
+        });
+        if (nextEvent === null) {
+          // null signals stream done
+          break;
+        }
+        yield nextEvent;
+      }
+    }
 
-    // Timeout fallback
-    const timeout = setTimeout(() => {
-      console.log('[UpupTransport] stream timeout');
-      resolveStream();
-    }, 60000);
-
-    await streamPromise;
-    clearTimeout(timeout);
+    // Yield any remaining events in queue
+    while (eventQueue.length > 0) {
+      yield eventQueue.shift()!;
+    }
 
     // Cleanup handlers
     this.off('event', eventHandler);
@@ -368,10 +393,6 @@ class UpupTransport {
     // If there was an error, yield it as an event
     if (hasError) {
       yield { type: 'error', error: errorMessage } as unknown as ServerEvent;
-    }
-
-    for (const event of events) {
-      yield event;
     }
   }
 
