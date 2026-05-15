@@ -191,27 +191,27 @@ echo '{"jsonrpc":"2.0","id":2,"method":"run","params":{"prompt":"What is 2+2?"}}
 
 ### 4.1 已完成功能
 
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| Provider 注册 | ✅ | `upupProviderRegistration` |
-| Workspace 注册 | ✅ | `upupWorkspaceRegistration` |
-| ChatRuntime | ✅ | 完整实现，支持崩溃恢复 |
-| Settings Tab | ✅ | 8 Provider UI |
-| Settings Reconciler | ✅ | 环境变量哈希 |
-| Agent Mention | ✅ | SKILL.md 发现 |
-| Skill Catalog | ✅ | 命令目录 |
-| Transform Events | ✅ | 11 种事件类型 |
-| Binary Detection | ✅ | 智能查找系统 upup |
-| stdio 通信 | ✅ | 使用原生 upup --stdio |
+| 组件 | 状态 | 说明 | 验证日期 |
+|------|------|------|----------|
+| Provider 注册 | ✅ | `upupProviderRegistration` | 2026-05-13 |
+| Workspace 注册 | ✅ | `upupWorkspaceRegistration` | 2026-05-13 |
+| ChatRuntime | ✅ | 完整实现，支持崩溃恢复 | 2026-05-13 |
+| Settings Tab | ✅ | 8 Provider UI | 2026-05-13 |
+| Settings Reconciler | ✅ | 环境变量哈希 | 2026-05-13 |
+| Agent Mention | ✅ | SKILL.md 发现 | 2026-05-13 |
+| Skill Catalog | ✅ | 命令目录 | 2026-05-13 |
+| Transform Events | ✅ | 11 种事件类型 | 2026-05-13 |
+| Binary Detection | ✅ | 智能查找系统 upup | 2026-05-13 |
+| stdio 通信 | ✅ | 使用原生 upup --stdio | 2026-05-13 |
+| 实时流式传输 | ✅ | 修复批处理为实时模式 | 2026-05-16 |
+| Obsidian 集成 | ✅ | 构建并安装到 Obsidian | 2026-05-15 |
+| 单元测试 | ✅ | 57 个测试全部通过 | 2026-05-15 |
 
-### 4.2 待验证功能
+### 4.2 v1.2 升级计划
 
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| Obsidian 运行时 | ⏳ | 需在 Obsidian 中启用插件测试 |
-| 工具调用 | ⏳ | 需真实场景测试 |
-| 会话管理 | ⏳ | fork/invalidate 逻辑 |
-| MCP 集成 | ⏳ | 可选高级功能 |
+**下一步**：实现会话持久化和对话连续性
+
+详见 [upup1.2.md](./upup1.2.md)
 
 ---
 
@@ -231,6 +231,10 @@ npm run build
 
 # 单元测试
 npm run test -- --selectProjects unit --testPathPatterns="providers/upup"
+
+# 发布脚本
+bash scripts/publish.sh
+bash scripts/install-local.sh
 ```
 
 ### 5.2 构建产物
@@ -238,8 +242,8 @@ npm run test -- --selectProjects unit --testPathPatterns="providers/upup"
 | 文件 | 大小 | 说明 |
 |------|------|------|
 | `main.js` | 3.7 MB | 主入口文件 |
-| `manifest.json` | ~200 bytes | 插件清单 |
-| `styles.css` | 126 KB | 样式文件 |
+| `manifest.json` | ~200 bytes | 插件清单 (v2.0.14-upup) |
+| `styles.css` | 122 KB | 样式文件 |
 
 ### 5.3 安装路径
 
