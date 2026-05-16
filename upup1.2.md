@@ -3,7 +3,7 @@
 **日期**：2026-05-16
 **版本**：1.2（基于 v1.1 的增量更新）
 **目标**：实现会话持久化、对话连续性、Obsidian 知识图谱集成
-**发布版本**：v2.0.16T0516-upup ✅
+**发布版本**：v2.0.17T0516-upup ✅
 
 ---
 
@@ -697,12 +697,42 @@ v1.2.3 - 功能完善 (完成: 2026-05-16) ✅
 
 ---
 
+## 问题诊断与修复
+
+### 问题：Session 没有上下文记忆
+
+**根因分析**：
+1. upup SDK 的 `stream()` 方法每次都发送 `run` 请求给新进程
+2. 每次请求后进程被关闭，无法保持会话上下文
+3. upup `--stdio` 协议本身不支持传递历史消息
+
+**解决方案**：
+- ✅ 复用 Transport 连接 - 保持 upup 进程存活
+- ✅ 不再每次查询都创建新的 transport
+- ✅ 复用 sessionId 维持会话连续性
+
+**修改内容**：
+```typescript
+// UpupChatRuntime.attemptConnection()
+private async attemptConnection(...) {
+  // Only create new transport if needed (keep existing process for session continuity)
+  if (!this.transport || !this.transport.connected) {
+    // Create new transport
+  } else {
+    console.log('[UpupChatRuntime] reusing existing transport');
+    this.readyState = true;
+  }
+}
+```
+
+---
+
 ## 发布信息
 
-**发布版本**：v2.0.16T0516-upup
+**发布版本**：v2.0.17T0516-upup
 **发布时间**：2026-05-16
-**Git Tag**：v2.0.16T0516-upup
-**包文件**：claudian-2.0.16T0516-upup.zip
+**Git Tag**：v2.0.17T0516-upup
+**包文件**：claudian-2.0.17T0516-upup.zip
 **本地安装**：✅ 已安装到 /Users/louloulin/Documents/Obsidian Vault
 
 **下一步操作**：
