@@ -34,6 +34,8 @@ import { getUpupProviderSettings } from '../settings';
 import { UpupSessionManager, createUpupSessionManager } from './UpupSessionManager';
 import { JsonSessionStore } from '../storage/UpupSessionStore';
 import { UpupHistorySync } from './UpupHistorySync';
+import { VaultToolHandler, VaultToolName } from '../vault/VaultToolHandler';
+import { VaultWatcher } from '../vault/VaultWatcher';
 
 // ============ Constants ============
 
@@ -492,6 +494,8 @@ export class UpupChatRuntime implements ChatRuntime {
   private sessionId: string | null = null;
   private readyState = false;
   private reconnectAttempts = 0;
+  private vaultToolHandler: VaultToolHandler | null = null;
+  private vaultWatcher: VaultWatcher | null = null;
 
   constructor(private plugin: ClaudianPlugin) {}
 
@@ -585,6 +589,10 @@ export class UpupChatRuntime implements ChatRuntime {
         this.sessionId = `upup-${Date.now()}`;
         this.readyState = true;
         this.reconnectAttempts = 0;
+
+        // Initialize vault handlers
+        this.initVaultHandlers();
+
         return true;
       } catch (err) {
         console.error(`[UpupChatRuntime] Connection attempt ${attempt + 1} failed:`, err);
@@ -603,6 +611,22 @@ export class UpupChatRuntime implements ChatRuntime {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Initialize vault tool handler and watcher
+   */
+  private initVaultHandlers(): void {
+    if (!this.vaultToolHandler) {
+      this.vaultToolHandler = new VaultToolHandler(this.plugin);
+      console.log('[UpupChatRuntime] VaultToolHandler initialized');
+    }
+
+    if (!this.vaultWatcher) {
+      this.vaultWatcher = new VaultWatcher(this.plugin);
+      this.vaultWatcher.start();
+      console.log('[UpupChatRuntime] VaultWatcher started');
+    }
   }
 
   async forceRestart(): Promise<boolean> {
@@ -661,6 +685,40 @@ export class UpupChatRuntime implements ChatRuntime {
       for await (const event of this.transport!.streamRun({ messages, model })) {
         eventCount++;
         console.log('[UpupChatRuntime] event:', event.type, '|', JSON.stringify(event).slice(0, 200));
+
+        // Handle vault tool interception
+        if (event.type === 'tool_start' && this.vaultToolHandler) {
+          const toolName = String(event.tool || '');
+          const toolCallId = String(event.toolCallId || '');
+
+          if (this.vaultToolHandler.isVaultTool(toolName)) {
+            console.log('[UpupChatRuntime] intercepting vault tool:', toolName);
+
+            // Execute tool and yield result
+            const args = (event.args || {}) as Record<string, unknown>;
+            const result = await this.vaultToolHandler.handleTool(toolName as VaultToolName, args);
+
+            console.log('[UpupChatRuntime] vault tool result:', result.success ? 'OK' : 'ERROR');
+
+            // Yield tool use chunk
+            yield {
+              type: 'tool_use' as const,
+              id: toolCallId,
+              name: toolName,
+              input: args,
+            };
+
+            // Yield tool result chunk
+            yield {
+              type: 'tool_result' as const,
+              id: toolCallId,
+              content: result.content,
+              isError: !result.success,
+            };
+
+            continue;
+          }
+        }
 
         // Track assistant content
         if (event.type === 'stream_progress') {
@@ -734,6 +792,13 @@ export class UpupChatRuntime implements ChatRuntime {
   }
 
   cleanup(): void {
+    // Stop vault watcher
+    if (this.vaultWatcher) {
+      this.vaultWatcher.stop();
+      this.vaultWatcher = null;
+    }
+    this.vaultToolHandler = null;
+
     if (this.transport) {
       this.transport.shutdown().catch(() => {});
       this.transport = null;

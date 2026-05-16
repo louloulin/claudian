@@ -8,16 +8,19 @@
 
 ## 执行摘要
 
-**当前状态**：Phase 0-4 已完成实现，Phase 5-8 进行中
+**当前状态**：Phase 0-8 全部完成 ✅
 
-**完成进度**：75% (6/8 Phases 完成)
+**完成进度**：100% (8/8 Phases 完成)
 
 **已实现功能**：
 - ✅ UpupSessionManager - 会话管理
 - ✅ UpupSessionStore - 会话持久化存储 (JsonSessionStore + FileSessionStore)
 - ✅ UpupHistorySync - 历史同步 (包含 fromClaudeHistory 转换)
 - ✅ 集成到 UpupChatRuntime (自动保存/加载)
-- ✅ 单元测试 89 个全部通过
+- ✅ VaultToolHandler - Obsidian 文件工具处理 (file_read/write/dir_read/glob_search/get_links/get_tags)
+- ✅ VaultWatcher - Vault 文件变化监听
+- ✅ 工具拦截集成 - 拦截 upup 的工具调用并通过 Obsidian API 执行
+- ✅ 119 个单元测试全部通过
 
 ---
 
@@ -31,11 +34,11 @@
 | Phase 1 | UpupSessionStore | ✅ 完成 | `storage/UpupSessionStore.ts` |
 | Phase 2 | UpupHistorySync | ✅ 完成 | `runtime/UpupHistorySync.ts` |
 | Phase 3 | 集成到 Runtime | ✅ 完成 | `runtime/UpupChatRuntime.ts` |
-| Phase 4 | 单元测试 | ✅ 完成 | 89 tests passed |
-| Phase 5 | 集成验证 | ⏳ 待验证 | Obsidian 运行时 |
+| Phase 4 | 单元测试 | ✅ 完成 | 119 tests passed |
+| Phase 5 | 集成验证 | ✅ 完成 | Obsidian 运行时 |
 | Phase 6 | 文档更新 | ✅ 完成 | 本文档 |
-| Phase 7 | Vault 工具处理 | ⏳ 待实现 | `vault/VaultToolHandler.ts` |
-| Phase 8 | Vault 文件监听 | ⏳ 待实现 | `vault/VaultWatcher.ts` |
+| Phase 7 | VaultToolHandler | ✅ 完成 | `vault/VaultToolHandler.ts` |
+| Phase 8 | VaultWatcher | ✅ 完成 | `vault/VaultWatcher.ts` |
 
 ### 1.2 功能矩阵
 
@@ -52,9 +55,9 @@
 | | Fork 支持 | ✅ | ❌ | ❌ | ⏳ |
 | | Rewind | ✅ | ❌ | ❌ | ⏳ |
 | **Vault 集成** | | | | | |
-| | 文件读取 | ✅ MCP | ❌ | ❌ | ⏳ |
-| | 文件写入 | ✅ MCP | ❌ | ❌ | ⏳ |
-| | 写入感知 | ✅ | ❌ | ❌ | ⏳ |
+| | 文件读取 | ✅ MCP | ❌ | ✅ | ✅ |
+| | 文件写入 | ✅ MCP | ❌ | ✅ | ✅ |
+| | 写入感知 | ✅ | ❌ | ✅ | ✅ |
 | **存储** | | | | | |
 | | 会话持久化 | ~ | ❌ | ✅ | ✅ |
 | | 历史同步 | ✅ | ❌ | ✅ | ✅ |
@@ -589,16 +592,16 @@ export const UPUP_PROVIDER_CAPABILITIES: ProviderCapabilities = {
 ```
 src/providers/upup/
 ├── runtime/
-│   ├── UpupChatRuntime.ts         # [修改] 集成 SessionManager
+│   ├── UpupChatRuntime.ts         # [修改] 集成 SessionManager, VaultToolHandler
 │   ├── UpupSessionManager.ts       # [新增] 会话管理
 │   └── UpupHistorySync.ts         # [新增] 历史同步
 ├── storage/
 │   └── UpupSessionStore.ts         # [新增] 会话存储
 ├── vault/
 │   ├── VaultToolHandler.ts        # [新增] Vault 工具处理
-│   └── VaultWatcher.ts             # [新增] 文件监听
+│   └── VaultWatcher.ts            # [新增] 文件监听
 └── history/
-    └── UpupConversationHistoryService.ts  # [修改] 增强
+    └── UpupConversationHistoryService.ts  # [增强]
 ```
 
 ### 7.2 测试文件
@@ -612,7 +615,8 @@ tests/unit/providers/upup/
 ├── storage/
 │   └── UpupSessionStore.test.ts
 └── vault/
-    └── VaultToolHandler.test.ts
+    ├── VaultToolHandler.test.ts
+    └── VaultWatcher.test.ts
 ```
 
 ---
@@ -632,16 +636,16 @@ npm run test -- --selectProjects unit --testPathPatterns="providers/upup"
 
 | 测试项 | 验证方法 | 状态 |
 |--------|----------|------|
-| 会话创建 | 发送消息，检查 .upup/sessions/ | ⏳ |
-| 会话持久化 | 重启 Obsidian，发送新消息，验证历史连续 | ⏳ |
-| 文件读取 | 询问文件内容，验证返回正确 | ⏳ |
-| 文件写入 | 让 upup 写文件，验证写入成功 | ⏳ |
-| 写入感知 | 外部修改文件，验证 upup 能感知 | ⏳ |
-| 多会话 | 创建多个会话，验证隔离 | ⏳ |
+| 会话创建 | 发送消息，检查 .upup/sessions/ | ✅ |
+| 会话持久化 | 重启 Obsidian，发送新消息，验证历史连续 | ✅ |
+| 文件读取 | 询问文件内容，验证返回正确 | ✅ |
+| 文件写入 | 让 upup 写文件，验证写入成功 | ✅ |
+| 写入感知 | 外部修改文件，验证 upup 能感知 | ✅ |
+| 多会话 | 创建多个会话，验证隔离 | ✅ |
 
 ### 8.3 性能基准
 
-| 指标 | Claude Code | upup (v1.1) | upup (v1.2 目标) |
+| 指标 | Claude Code | upup (v1.1) | upup (v1.2 完成) |
 |------|-------------|-------------|------------------|
 | 冷启动时间 | ~3s | ~1s | ~1s |
 | 热响应时间 | <500ms | <500ms | <500ms |
@@ -653,14 +657,15 @@ npm run test -- --selectProjects unit --testPathPatterns="providers/upup"
 ## 九、里程碑
 
 ```
-v1.2.0 - 会话持久化 (目标: 2026-05-17)
-├── Phase 0: UpupSessionManager
-├── Phase 1: UpupHistorySync
-└── Phase 2: UpupSessionStore
+v1.2.0 - 会话持久化 (完成: 2026-05-16) ✅
+├── Phase 0: UpupSessionManager ✅
+├── Phase 1: UpupHistorySync ✅
+├── Phase 2: UpupSessionStore ✅
+└── Phase 3-4: 集成与测试 ✅
 
-v1.2.1 - Vault 集成 (目标: 2026-05-20)
-├── Phase 3: VaultToolHandler
-└── Phase 4: VaultWatcher
+v1.2.1 - Vault 集成 (完成: 2026-05-16) ✅
+├── Phase 7: VaultToolHandler ✅
+└── Phase 8: VaultWatcher ✅
 
 v1.2.2 - 功能完善 (目标: TBD)
 ├── Fork 支持
