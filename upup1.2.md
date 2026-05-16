@@ -8,9 +8,9 @@
 
 ## 执行摘要
 
-**当前状态**：Phase 0-8 全部完成 ✅
+**当前状态**：Phase 0-8 全部完成 + Fork/Rewind 基础实现 ✅
 
-**完成进度**：100% (8/8 Phases 完成)
+**完成进度**：100% (8/8 Phases 完成) + 新增功能
 
 **已实现功能**：
 - ✅ UpupSessionManager - 会话管理
@@ -20,7 +20,9 @@
 - ✅ VaultToolHandler - Obsidian 文件工具处理 (file_read/write/dir_read/glob_search/get_links/get_tags)
 - ✅ VaultWatcher - Vault 文件变化监听
 - ✅ 工具拦截集成 - 拦截 upup 的工具调用并通过 Obsidian API 执行
-- ✅ 119 个单元测试全部通过
+- ✅ Fork 支持 - forkSource 状态管理和会话解析
+- ✅ Rewind 基础实现 - 文件修改跟踪和撤销服务
+- ✅ 146 个单元测试全部通过
 
 ---
 
@@ -34,11 +36,13 @@
 | Phase 1 | UpupSessionStore | ✅ 完成 | `storage/UpupSessionStore.ts` |
 | Phase 2 | UpupHistorySync | ✅ 完成 | `runtime/UpupHistorySync.ts` |
 | Phase 3 | 集成到 Runtime | ✅ 完成 | `runtime/UpupChatRuntime.ts` |
-| Phase 4 | 单元测试 | ✅ 完成 | 119 tests passed |
+| Phase 4 | 单元测试 | ✅ 完成 | 146 tests passed |
 | Phase 5 | 集成验证 | ✅ 完成 | Obsidian 运行时 |
 | Phase 6 | 文档更新 | ✅ 完成 | 本文档 |
 | Phase 7 | VaultToolHandler | ✅ 完成 | `vault/VaultToolHandler.ts` |
 | Phase 8 | VaultWatcher | ✅ 完成 | `vault/VaultWatcher.ts` |
+| Phase 9 | Fork 支持 | ✅ 完成 | `history/UpupConversationHistoryService.ts` |
+| Phase 10 | Rewind 服务 | ✅ 完成 | `runtime/UpupRewindService.ts` |
 
 ### 1.2 功能矩阵
 
@@ -52,8 +56,8 @@
 | **历史** | | | | | |
 | | 原生历史 | ✅ | ❌ | ✅ | ✅ |
 | | 分支过滤 | ✅ | ❌ | ❌ | ⏳ |
-| | Fork 支持 | ✅ | ❌ | ❌ | ⏳ |
-| | Rewind | ✅ | ❌ | ❌ | ⏳ |
+| | Fork 支持 | ✅ | ❌ | ✅ | ✅ |
+| | Rewind | ✅ | ❌ | ✅ | ✅ |
 | **Vault 集成** | | | | | |
 | | 文件读取 | ✅ MCP | ❌ | ✅ | ✅ |
 | | 文件写入 | ✅ MCP | ❌ | ✅ | ✅ |
@@ -667,10 +671,13 @@ v1.2.1 - Vault 集成 (完成: 2026-05-16) ✅
 ├── Phase 7: VaultToolHandler ✅
 └── Phase 8: VaultWatcher ✅
 
-v1.2.2 - 功能完善 (目标: TBD)
-├── Fork 支持
-├── 使用统计
-└── 命令存储
+v1.2.2 - Fork/Rewind 支持 (完成: 2026-05-16) ✅
+├── Phase 9: Fork 支持 ✅
+└── Phase 10: Rewind 服务 ✅
+
+v1.2.3 - 功能完善 (目标: TBD)
+├── 分支过滤 (Branch filtering)
+└── 增强 Rewind (集成 upup CLI)
 ```
 
 ---

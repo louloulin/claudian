@@ -36,6 +36,7 @@ import { JsonSessionStore } from '../storage/UpupSessionStore';
 import { UpupHistorySync } from './UpupHistorySync';
 import { VaultToolHandler, VaultToolName } from '../vault/VaultToolHandler';
 import { VaultWatcher } from '../vault/VaultWatcher';
+import { UpupRewindService } from './UpupRewindService';
 
 // ============ Constants ============
 
@@ -496,8 +497,12 @@ export class UpupChatRuntime implements ChatRuntime {
   private reconnectAttempts = 0;
   private vaultToolHandler: VaultToolHandler | null = null;
   private vaultWatcher: VaultWatcher | null = null;
+  private rewindService: UpupRewindService | null = null;
 
-  constructor(private plugin: ClaudianPlugin) {}
+  constructor(private plugin: ClaudianPlugin) {
+    // Initialize rewind service
+    this.rewindService = new UpupRewindService(plugin);
+  }
 
   getCapabilities() {
     return UPUP_PROVIDER_CAPABILITIES;
@@ -807,10 +812,20 @@ export class UpupChatRuntime implements ChatRuntime {
   }
 
   async rewind(
-    _userMessageId: string,
+    userMessageId: string,
     _assistantMessageId: string,
   ): Promise<ChatRewindResult> {
-    return { canRewind: false };
+    if (!this.rewindService) {
+      return { canRewind: false, error: 'Rewind service not initialized' };
+    }
+
+    // 检查是否可以撤销
+    if (!this.rewindService.canRewind()) {
+      return { canRewind: false, error: 'No changes to rewind' };
+    }
+
+    // 执行撤销
+    return this.rewindService.executeRewind(userMessageId);
   }
 
   setApprovalCallback(_callback: ApprovalCallback | null): void {}
@@ -836,8 +851,25 @@ export class UpupChatRuntime implements ChatRuntime {
     return { updates: {} };
   }
 
-  resolveSessionIdForFork(_conversation: Conversation | null): string | null {
-    return `upup-fork-${Date.now()}`;
+  resolveSessionIdForFork(conversation: Conversation | null): string | null {
+    if (!conversation?.providerState) return null;
+
+    const providerState = conversation.providerState as Record<string, unknown>;
+
+    // Check for fork source in provider state
+    if (providerState.forkSource && typeof providerState.forkSource === 'object') {
+      const forkSource = providerState.forkSource as { sessionId?: string };
+      if (forkSource.sessionId) {
+        return forkSource.sessionId;
+      }
+    }
+
+    // Fall back to sessionId
+    if (providerState.sessionId && typeof providerState.sessionId === 'string') {
+      return providerState.sessionId;
+    }
+
+    return null;
   }
 
   // ============ Session Management ============
