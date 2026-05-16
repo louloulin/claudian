@@ -6,6 +6,18 @@
 import { UpupConversationHistoryService } from '../../../../../src/providers/upup/history/UpupConversationHistoryService';
 import type { Conversation } from '../../../../../src/core/types';
 
+// Helper to create minimal Conversation mock
+const createMockConversation = (providerState?: Record<string, unknown>): Conversation => ({
+  id: 'test-conv-id',
+  providerId: 'upup',
+  title: 'Test Conversation',
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+  providerState: providerState as Conversation['providerState'],
+  messages: [],
+  sessionId: null,
+});
+
 describe('UpupConversationHistoryService', () => {
   let service: UpupConversationHistoryService;
 
@@ -19,40 +31,34 @@ describe('UpupConversationHistoryService', () => {
     });
 
     it('should return null for conversation without providerState', () => {
-      const conversation = {} as Conversation;
+      const conversation = createMockConversation(undefined);
       expect(service.resolveSessionIdForConversation(conversation)).toBeNull();
     });
 
     it('should return sessionId from providerState', () => {
-      const conversation = {
-        providerState: { sessionId: 'test-session-123' },
-      } as Conversation;
+      const conversation = createMockConversation({ sessionId: 'test-session-123' });
       expect(service.resolveSessionIdForConversation(conversation)).toBe('test-session-123');
     });
 
     it('should return forkSource sessionId when present', () => {
-      const conversation = {
-        providerState: {
-          sessionId: 'main-session',
-          forkSource: {
-            sessionId: 'fork-source-session',
-            resumeAt: 'msg-5',
-          },
+      const conversation = createMockConversation({
+        sessionId: 'main-session',
+        forkSource: {
+          sessionId: 'fork-source-session',
+          resumeAt: 'msg-5',
         },
-      } as Conversation;
+      });
       expect(service.resolveSessionIdForConversation(conversation)).toBe('fork-source-session');
     });
 
     it('should prefer forkSource over sessionId', () => {
-      const conversation = {
-        providerState: {
-          sessionId: 'main-session',
-          forkSource: {
-            sessionId: 'fork-session',
-            resumeAt: 'msg-10',
-          },
+      const conversation = createMockConversation({
+        sessionId: 'main-session',
+        forkSource: {
+          sessionId: 'fork-session',
+          resumeAt: 'msg-10',
         },
-      } as Conversation;
+      });
       const result = service.resolveSessionIdForConversation(conversation);
       expect(result).toBe('fork-session');
     });
@@ -60,37 +66,31 @@ describe('UpupConversationHistoryService', () => {
 
   describe('isPendingForkConversation', () => {
     it('should return false for null conversation', () => {
-      const conversation = {} as Conversation;
+      const conversation = createMockConversation(undefined);
       expect(service.isPendingForkConversation(conversation)).toBe(false);
     });
 
     it('should return false for conversation without forkSource', () => {
-      const conversation = {
-        providerState: { sessionId: 'test-session' },
-      } as Conversation;
+      const conversation = createMockConversation({ sessionId: 'test-session' });
       expect(service.isPendingForkConversation(conversation)).toBe(false);
     });
 
     it('should return true for conversation with forkSource', () => {
-      const conversation = {
-        providerState: {
-          forkSource: {
-            sessionId: 'source-session',
-            resumeAt: 'msg-5',
-          },
+      const conversation = createMockConversation({
+        forkSource: {
+          sessionId: 'source-session',
+          resumeAt: 'msg-5',
         },
-      } as Conversation;
+      });
       expect(service.isPendingForkConversation(conversation)).toBe(true);
     });
 
     it('should return false for forkSource without sessionId', () => {
-      const conversation = {
-        providerState: {
-          forkSource: {
-            resumeAt: 'msg-5',
-          },
+      const conversation = createMockConversation({
+        forkSource: {
+          resumeAt: 'msg-5',
         },
-      } as Conversation;
+      });
       expect(service.isPendingForkConversation(conversation)).toBe(false);
     });
   });
@@ -121,14 +121,14 @@ describe('UpupConversationHistoryService', () => {
 
   describe('deleteConversationSession', () => {
     it('should not throw when called', async () => {
-      const conversation = { providerState: { sessionId: 'test' } } as Conversation;
+      const conversation = createMockConversation({ sessionId: 'test' });
       await expect(service.deleteConversationSession(conversation, '/tmp')).resolves.not.toThrow();
     });
   });
 
   describe('hydrateConversationHistory', () => {
     it('should not throw when called', async () => {
-      const conversation = { providerState: { sessionId: 'test' } } as Conversation;
+      const conversation = createMockConversation({ sessionId: 'test' });
       await expect(service.hydrateConversationHistory(conversation, '/tmp')).resolves.not.toThrow();
     });
   });
