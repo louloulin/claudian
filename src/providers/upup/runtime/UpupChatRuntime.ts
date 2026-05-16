@@ -31,6 +31,9 @@ import type ClaudianPlugin from '../../../main';
 import { getVaultPath } from '../../../utils/path';
 import { UPUP_PROVIDER_CAPABILITIES } from '../capabilities';
 import { getUpupProviderSettings } from '../settings';
+import { UpupSessionManager, createUpupSessionManager } from './UpupSessionManager';
+import { JsonSessionStore } from '../storage/UpupSessionStore';
+import { UpupHistorySync } from './UpupHistorySync';
 
 // ============ Constants ============
 
@@ -624,11 +627,28 @@ export class UpupChatRuntime implements ChatRuntime {
     const settings = getUpupProviderSettings(this.plugin.settings);
     const model = queryOptions?.model ?? settings.model;
 
-    console.log('[UpupChatRuntime] query:', { model, prompt: turn.prompt.slice(0, 50) });
+    // Get conversation ID from query options or generate new one
+    const conversationId = (queryOptions as { conversationId?: string })?.conversationId ?? `conv-${Date.now()}`;
 
+    // Get or create session manager for this conversation
+    const sessionMgr = this.getSessionManager(conversationId);
+
+    // Add user message to session
+    sessionMgr.addUserMessage(turn.prompt);
+
+    console.log('[UpupChatRuntime] query:', { model, conversationId, prompt: turn.prompt.slice(0, 50) });
+
+    // Get history for context
+    const history = sessionMgr.getHistory();
+
+    // Build messages with history
     const messages = [
+      ...history.slice(0, -1), // All except the new message
       { role: 'user' as const, content: turn.prompt },
     ];
+
+    let assistantContent = '';
+    let eventCount = 0;
 
     try {
       const streamState = {
@@ -637,11 +657,18 @@ export class UpupChatRuntime implements ChatRuntime {
         partialJson: {},
         accumulatedText: '',
       };
-      let eventCount = 0;
 
       for await (const event of this.transport!.streamRun({ messages, model })) {
         eventCount++;
         console.log('[UpupChatRuntime] event:', event.type, '|', JSON.stringify(event).slice(0, 200));
+
+        // Track assistant content
+        if (event.type === 'stream_progress') {
+          const charDelta = (event as { charDelta?: string }).charDelta;
+          if (typeof charDelta === 'string') {
+            assistantContent += charDelta;
+          }
+        }
 
         const chunk = transformServerEvent(event, streamState);
         if (chunk) {
@@ -652,7 +679,15 @@ export class UpupChatRuntime implements ChatRuntime {
         }
       }
 
-      console.log('[UpupChatRuntime] stream complete, events:', eventCount, 'chunks:', eventCount);
+      console.log('[UpupChatRuntime] stream complete, events:', eventCount);
+
+      // Add assistant response to session
+      if (assistantContent) {
+        sessionMgr.addAssistantMessage(assistantContent);
+      }
+
+      // Save session after completion
+      await sessionMgr.save();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       if (errorMessage.includes('process') || errorMessage.includes('ENOENT')) {
@@ -738,5 +773,60 @@ export class UpupChatRuntime implements ChatRuntime {
 
   resolveSessionIdForFork(_conversation: Conversation | null): string | null {
     return `upup-fork-${Date.now()}`;
+  }
+
+  // ============ Session Management ============
+
+  private sessionManager: UpupSessionManager | null = null;
+  private sessionStore: JsonSessionStore | null = null;
+
+  /**
+   * 获取会话管理器
+   */
+  private getSessionManager(conversationId: string): UpupSessionManager {
+    if (!this.sessionManager || this.sessionManager.getCurrentSession()?.conversationId !== conversationId) {
+      const vaultPath = getVaultPath(this.plugin.app) ?? process.cwd();
+      const sessionPath = path.join(vaultPath, '.upup', 'sessions');
+
+      // Create session store
+      this.sessionStore = new JsonSessionStore(sessionPath);
+
+      // Create session manager with auto-save
+      this.sessionManager = createUpupSessionManager(conversationId, async (session, messages) => {
+        if (this.sessionStore) {
+          await this.sessionStore.save(session, messages);
+        }
+      });
+    }
+    return this.sessionManager;
+  }
+
+  /**
+   * 加载会话
+   */
+  async loadSession(sessionId: string): Promise<boolean> {
+    const vaultPath = getVaultPath(this.plugin.app) ?? process.cwd();
+    const sessionPath = path.join(vaultPath, '.upup', 'sessions');
+    const store = new JsonSessionStore(sessionPath);
+
+    const data = await store.load(sessionId);
+    if (!data) {
+      return false;
+    }
+
+    this.sessionStore = store;
+    this.sessionManager = createUpupSessionManager(data.session.conversationId);
+    this.sessionManager.load(data.session, data.messages);
+
+    return true;
+  }
+
+  /**
+   * 保存当前会话
+   */
+  async saveCurrentSession(): Promise<void> {
+    if (this.sessionManager) {
+      await this.sessionManager.save();
+    }
   }
 }
