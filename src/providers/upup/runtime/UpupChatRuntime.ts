@@ -548,56 +548,62 @@ export class UpupChatRuntime implements ChatRuntime {
       try {
         console.log('[UpupChatRuntime] connection attempt:', attempt + 1);
 
-        if (this.transport) {
-          await this.transport.shutdown().catch(() => {});
-          this.transport = null;
-        }
+        // Only create new transport if needed (keep existing process for session continuity)
+        if (!this.transport || !this.transport.connected) {
+          const settings = getUpupProviderSettings(this.plugin.settings);
 
-        const settings = getUpupProviderSettings(this.plugin.settings);
+          // Determine command
+          let binary: BinaryLocation;
 
-        // Determine command
-        let binary: BinaryLocation;
+          if (settings.cliPath && settings.cliPath !== 'auto') {
+            // Custom path - use as executable with --stdio
+            binary = { command: settings.cliPath, args: ['--stdio'], source: 'explicit' };
+          } else {
+            // Auto-detect upup
+            binary = findUpupBinary();
+          }
 
-        if (settings.cliPath && settings.cliPath !== 'auto') {
-          // Custom path - use as executable with --stdio
-          binary = { command: settings.cliPath, args: ['--stdio'], source: 'explicit' };
-        } else {
-          // Auto-detect upup
-          binary = findUpupBinary();
-        }
+          console.log('[UpupChatRuntime] using:', binary.command, binary.args.join(' '));
 
-        console.log('[UpupChatRuntime] using:', binary.command, binary.args.join(' '));
+          // Build environment with API keys
+          const env: Record<string, string> = {};
+          for (const [key, value] of Object.entries(process.env)) {
+            if (value !== undefined) {
+              env[key] = value;
+            }
+          }
 
-        // Build environment with API keys
-        const env: Record<string, string> = {};
-        for (const [key, value] of Object.entries(process.env)) {
-          if (value !== undefined) {
+          const envVars = getRuntimeEnvironmentVariables(this.plugin.settings, 'upup');
+          for (const [key, value] of Object.entries(envVars)) {
             env[key] = value;
           }
+
+          const apiKeyCount = Object.keys(envVars).filter(k => k.includes('API_KEY')).length;
+          console.log('[UpupChatRuntime] Environment vars loaded:', apiKeyCount, 'API keys');
+
+          // Get vault path for cwd
+          const vaultPath = getVaultPath(this.plugin.app) ?? process.cwd();
+
+          // Create new transport (or reuse existing connected one)
+          if (!this.transport) {
+            this.transport = new UpupTransport({ debug: false });
+          }
+          await this.transport.connect({ cwd: vaultPath, env });
+
+          console.log('[UpupChatRuntime] connection successful!');
+          // Keep the same sessionId for continuity
+          if (!this.sessionId) {
+            this.sessionId = `upup-${Date.now()}`;
+          }
+          this.readyState = true;
+          this.reconnectAttempts = 0;
+
+          // Initialize vault handlers
+          this.initVaultHandlers();
+        } else {
+          console.log('[UpupChatRuntime] reusing existing transport');
+          this.readyState = true;
         }
-
-        const envVars = getRuntimeEnvironmentVariables(this.plugin.settings, 'upup');
-        for (const [key, value] of Object.entries(envVars)) {
-          env[key] = value;
-        }
-
-        const apiKeyCount = Object.keys(envVars).filter(k => k.includes('API_KEY')).length;
-        console.log('[UpupChatRuntime] Environment vars loaded:', apiKeyCount, 'API keys');
-
-        // Get vault path for cwd
-        const vaultPath = getVaultPath(this.plugin.app) ?? process.cwd();
-
-        // Connect
-        this.transport = new UpupTransport({ debug: false });
-        await this.transport.connect({ cwd: vaultPath, env });
-
-        console.log('[UpupChatRuntime] connection successful!');
-        this.sessionId = `upup-${Date.now()}`;
-        this.readyState = true;
-        this.reconnectAttempts = 0;
-
-        // Initialize vault handlers
-        this.initVaultHandlers();
 
         return true;
       } catch (err) {
