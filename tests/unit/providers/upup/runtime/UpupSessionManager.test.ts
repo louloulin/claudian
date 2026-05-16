@@ -3,7 +3,8 @@
  * 单元测试 for UpupSessionManager
  */
 
-import { UpupSessionManager, SessionInfo, SessionMessage, createUpupSessionManager } from '../../../../../src/providers/upup/runtime/UpupSessionManager';
+import type { SessionInfo, SessionMessage} from '../../../../../src/providers/upup/runtime/UpupSessionManager';
+import { createUpupSessionManager,UpupSessionManager } from '../../../../../src/providers/upup/runtime/UpupSessionManager';
 
 describe('UpupSessionManager', () => {
   describe('create', () => {

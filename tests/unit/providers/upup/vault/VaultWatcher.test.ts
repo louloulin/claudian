@@ -3,8 +3,10 @@
  * 单元测试 for VaultWatcher
  */
 
-import { VaultWatcher, VaultEvent } from '../../../../../src/providers/upup/vault/VaultWatcher';
 import { TFile } from 'obsidian';
+
+import type { VaultEvent } from '../../../../../src/providers/upup/vault/VaultWatcher';
+import { VaultWatcher } from '../../../../../src/providers/upup/vault/VaultWatcher';
 
 // Mock EventRef
 interface MockEventRef {
@@ -12,29 +14,27 @@ interface MockEventRef {
 }
 
 // Mock TFile for proper instanceof checks
-class MockTFile {
-  path: string;
-  stat = { mtime: Date.now() };
-  basename = '';
-  extension = '.md';
-  constructor(path: string) {
-    this.path = path;
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MockTFile = TFile as any;
+function createMockTFile(path: string) {
+  const file = new MockTFile();
+  Object.defineProperty(file, 'path', { value: path, writable: true });
+  Object.defineProperty(file, 'stat', { value: { mtime: Date.now() }, writable: true });
+  Object.defineProperty(file, 'basename', { value: '', writable: true });
+  Object.defineProperty(file, 'extension', { value: '.md', writable: true });
+  return file;
 }
-
-// Make MockTFile behave like TFile for instanceof checks
-Object.setPrototypeOf(MockTFile.prototype, TFile.prototype);
 
 // Mock Obsidian API
 const createMockPlugin = () => {
-  const eventHandlers: Map<string, Set<Function>> = new Map();
+  const eventHandlers: Map<string, Set<(file: TFile, oldPath?: string) => void>> = new Map();
   const eventRefs: MockEventRef[] = [];
   let refId = 0;
 
   return {
     app: {
       vault: {
-        on: (event: string, handler: Function): MockEventRef => {
+        on: (event: string, handler: (file: TFile, oldPath?: string) => void): MockEventRef => {
           if (!eventHandlers.has(event)) {
             eventHandlers.set(event, new Set());
           }
@@ -43,13 +43,13 @@ const createMockPlugin = () => {
           eventRefs.push(ref);
           return ref;
         },
-        off: (_event: string, _handler: Function) => {},
+        off: (_event: string, _handler: () => void) => {},
         offref: (ref: MockEventRef) => {
           // Remove handlers associated with this ref (simplified for tests)
         },
       },
       metadataCache: {
-        on: (event: string, handler: Function): MockEventRef => {
+        on: (event: string, handler: (file: TFile, oldPath?: string) => void): MockEventRef => {
           if (!eventHandlers.has(event)) {
             eventHandlers.set(event, new Set());
           }
@@ -58,7 +58,7 @@ const createMockPlugin = () => {
           eventRefs.push(ref);
           return ref;
         },
-        off: (_event: string, _handler: Function) => {},
+        off: (_event: string, _handler: () => void) => {},
         offref: (ref: MockEventRef) => {},
       },
       // Helper to simulate events
@@ -72,7 +72,7 @@ const createMockPlugin = () => {
               } else {
                 handler(file);
               }
-            } catch (e) {
+            } catch {
               // Ignore handler errors in tests
             }
           }
@@ -135,7 +135,7 @@ describe('VaultWatcher', () => {
       watcher.start();
 
       // Simulate file create event with proper TFile-like object
-      const mockFile = new MockTFile('test.md') as unknown as TFile;
+      const mockFile = createMockTFile('test.md');
       mockPlugin.app._simulateEvent('create', mockFile);
 
       // The callback should have been called with a VaultEvent
@@ -150,7 +150,7 @@ describe('VaultWatcher', () => {
       watcher.onFileChange(callback);
       watcher.start();
 
-      const mockFile = new MockTFile('modified.md') as unknown as TFile;
+      const mockFile = createMockTFile('modified.md');
       mockPlugin.app._simulateEvent('modify', mockFile);
 
       expect(callback).toHaveBeenCalled();
@@ -166,7 +166,7 @@ describe('VaultWatcher', () => {
       watcher.onFileChange(callback2);
       watcher.start();
 
-      const mockFile = new MockTFile('multi.md') as unknown as TFile;
+      const mockFile = createMockTFile('multi.md');
       mockPlugin.app._simulateEvent('create', mockFile);
 
       expect(callback1).toHaveBeenCalled();
@@ -180,7 +180,7 @@ describe('VaultWatcher', () => {
       watcher.start();
 
       // After unsubscribe, callback should not be called
-      const mockFile = new MockTFile('unsub-test.md') as unknown as TFile;
+      const mockFile = createMockTFile('unsub-test.md');
       mockPlugin.app._simulateEvent('create', mockFile);
 
       expect(callback).not.toHaveBeenCalled();
@@ -194,7 +194,7 @@ describe('VaultWatcher', () => {
       watcher.start();
 
       // Non-.md files should be filtered out
-      const nonMdFile = new MockTFile('document.txt') as unknown as TFile;
+      const nonMdFile = createMockTFile('document.txt');
       mockPlugin.app._simulateEvent('create', nonMdFile);
 
       expect(callback).not.toHaveBeenCalled();
@@ -205,7 +205,7 @@ describe('VaultWatcher', () => {
       watcher.onFileChange(callback);
       watcher.start();
 
-      const mdFile = new MockTFile('my-note.md') as unknown as TFile;
+      const mdFile = createMockTFile('my-note.md');
       mockPlugin.app._simulateEvent('create', mdFile);
 
       expect(callback).toHaveBeenCalled();

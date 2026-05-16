@@ -31,12 +31,13 @@ import type ClaudianPlugin from '../../../main';
 import { getVaultPath } from '../../../utils/path';
 import { UPUP_PROVIDER_CAPABILITIES } from '../capabilities';
 import { getUpupProviderSettings } from '../settings';
-import { UpupSessionManager, createUpupSessionManager } from './UpupSessionManager';
 import { JsonSessionStore } from '../storage/UpupSessionStore';
-import { UpupHistorySync } from './UpupHistorySync';
-import { VaultToolHandler, VaultToolName } from '../vault/VaultToolHandler';
+import type { VaultToolName } from '../vault/VaultToolHandler';
+import { VaultToolHandler } from '../vault/VaultToolHandler';
 import { VaultWatcher } from '../vault/VaultWatcher';
 import { UpupRewindService } from './UpupRewindService';
+import type {UpupSessionManager } from './UpupSessionManager';
+import { createUpupSessionManager } from './UpupSessionManager';
 
 // ============ Constants ============
 

@@ -3,8 +3,15 @@
  * 单元测试 for VaultToolHandler
  */
 
-import { TFile, TFolder } from '../../../../../tests/__mocks__/obsidian';
-import { VaultToolHandler, VaultToolName } from '../../../../../src/providers/upup/vault/VaultToolHandler';
+import { TFile, TFolder } from 'obsidian';
+
+import type { VaultToolName } from '../../../../../src/providers/upup/vault/VaultToolHandler';
+import { VaultToolHandler } from '../../../../../src/providers/upup/vault/VaultToolHandler';
+
+// Create mock classes that inherit from obsidian TFile/TFolder for instanceof compatibility
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MockTFile = TFile as any;
+const MockTFolder = TFolder as any;
 
 // Mock Obsidian API
 const createMockPlugin = () => {
@@ -24,7 +31,8 @@ const createMockPlugin = () => {
           fileContents.set(file.path, content);
         },
         create: async (path: string, content: string) => {
-          const newFile = new TFile(path);
+          const newFile = new MockTFile();
+          Object.defineProperty(newFile, 'path', { value: path, writable: true });
           files.set(path, newFile);
           fileContents.set(path, content);
           return newFile;
@@ -42,12 +50,31 @@ const createMockPlugin = () => {
     _testSetup: (testFiles: Array<{ path: string; content: string; isFolder: boolean }>) => {
       for (const tf of testFiles) {
         if (tf.isFolder) {
-          const folder = new TFolder(tf.path);
+          const folder = new MockTFolder();
+          Object.defineProperty(folder, 'path', { value: tf.path, writable: true });
           files.set(tf.path, folder);
         } else {
-          const file = new TFile(tf.path);
+          const file = new MockTFile();
+          Object.defineProperty(file, 'path', { value: tf.path, writable: true });
           files.set(tf.path, file);
           fileContents.set(tf.path, tf.content);
+        }
+      }
+      // Update folder.children for nested files
+      for (const tf of testFiles) {
+        if (tf.path.includes('/') && !tf.isFolder) {
+          const parts = tf.path.split('/');
+          let parentPath = parts[0];
+          for (let i = 1; i < parts.length - 1; i++) {
+            parentPath += '/' + parts[i];
+          }
+          const folder = files.get(parentPath);
+          if (folder instanceof TFolder) {
+            const file = files.get(tf.path);
+            if (file) {
+              folder.children.push(file);
+            }
+          }
         }
       }
     },

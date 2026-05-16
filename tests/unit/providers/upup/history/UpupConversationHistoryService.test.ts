@@ -3,8 +3,8 @@
  * 单元测试 for UpupConversationHistoryService
  */
 
-import { UpupConversationHistoryService } from '../../../../../src/providers/upup/history/UpupConversationHistoryService';
 import type { Conversation } from '../../../../../src/core/types';
+import { UpupConversationHistoryService } from '../../../../../src/providers/upup/history/UpupConversationHistoryService';
 
 // Helper to create minimal Conversation mock
 const createMockConversation = (providerState?: Record<string, unknown>): Conversation => ({

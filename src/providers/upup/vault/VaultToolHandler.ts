@@ -5,6 +5,7 @@
  */
 
 import { TFile, TFolder } from 'obsidian';
+
 import type ClaudianPlugin from '../../../main';
 
 // ============ Types ============

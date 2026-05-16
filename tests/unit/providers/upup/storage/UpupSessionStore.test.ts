@@ -4,10 +4,11 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
-import { JsonSessionStore, FileSessionStore, createSessionStore } from '../../../../../src/providers/upup/storage/UpupSessionStore';
+import * as path from 'path';
+
 import type { SessionInfo, SessionMessage } from '../../../../../src/providers/upup/runtime/UpupSessionManager';
+import { createSessionStore,FileSessionStore, JsonSessionStore } from '../../../../../src/providers/upup/storage/UpupSessionStore';
 
 describe('JsonSessionStore', () => {
   let tmpDir: string;

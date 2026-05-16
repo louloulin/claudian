@@ -4,7 +4,9 @@
  * 监听 vault 中的文件创建、修改、删除事件
  */
 
-import { EventRef, TAbstractFile, TFile } from 'obsidian';
+import type { EventRef, TAbstractFile} from 'obsidian';
+import { TFile } from 'obsidian';
+
 import type ClaudianPlugin from '../../../main';
 
 // ============ Types ============
