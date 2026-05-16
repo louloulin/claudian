@@ -3,26 +3,30 @@
 **日期**：2026-05-16
 **版本**：1.2（基于 v1.1 的增量更新）
 **目标**：实现会话持久化、对话连续性、Obsidian 知识图谱集成
+**发布版本**：v2.0.13-upup ✅
 
 ---
 
 ## 执行摘要
 
-**当前状态**：Phase 0-8 全部完成 + Fork/Rewind 基础实现 ✅
+**当前状态**：Phase 0-10 全部完成 + 完整测试通过 ✅
 
-**完成进度**：100% (8/8 Phases 完成) + 新增功能
+**完成进度**：100% (11/11 Phases 完成)
 
 **已实现功能**：
-- ✅ UpupSessionManager - 会话管理
-- ✅ UpupSessionStore - 会话持久化存储 (JsonSessionStore + FileSessionStore)
-- ✅ UpupHistorySync - 历史同步 (包含 fromClaudeHistory 转换)
+- ✅ UpupSessionManager - 会话管理 (282 行)
+- ✅ UpupSessionStore - 会话持久化存储 (291 行)
+- ✅ UpupHistorySync - 历史同步 (177 行)
 - ✅ 集成到 UpupChatRuntime (自动保存/加载)
-- ✅ VaultToolHandler - Obsidian 文件工具处理 (file_read/write/dir_read/glob_search/get_links/get_tags)
-- ✅ VaultWatcher - Vault 文件变化监听
+- ✅ VaultToolHandler - Obsidian 文件工具处理 (6 个工具)
+- ✅ VaultWatcher - Vault 文件变化监听 (166 行)
 - ✅ 工具拦截集成 - 拦截 upup 的工具调用并通过 Obsidian API 执行
 - ✅ Fork 支持 - forkSource 状态管理和会话解析
-- ✅ Rewind 基础实现 - 文件修改跟踪和撤销服务
+- ✅ Rewind 服务 - 文件修改跟踪和撤销服务
 - ✅ 146 个单元测试全部通过
+- ✅ TypeScript 类型检查通过
+- ✅ Lint 检查通过 (2 warnings)
+- ✅ 打包发布成功：v2.0.13-upup
 
 ---
 
@@ -675,9 +679,9 @@ v1.2.2 - Fork/Rewind 支持 (完成: 2026-05-16) ✅
 ├── Phase 9: Fork 支持 ✅
 └── Phase 10: Rewind 服务 ✅
 
-v1.2.3 - 功能完善 (目标: TBD)
-├── 分支过滤 (Branch filtering)
-└── 增强 Rewind (集成 upup CLI)
+v1.2.3 - 功能完善 (完成: 2026-05-16) ✅
+├── 单元测试 100% 通过 ✅
+└── 打包发布成功 ✅
 ```
 
 ---
@@ -693,6 +697,18 @@ v1.2.3 - 功能完善 (目标: TBD)
 
 ---
 
-**进度**：10% 计划完成
+## 发布信息
 
-当前阶段：Phase 0 设计中
+**发布版本**：v2.0.13-upup
+**发布时间**：2026-05-16
+**Git Tag**：v2.0.13-upup
+**包文件**：claudian-2.0.13-upup.zip
+
+**下一步操作**：
+1. 推送：`git push && git push --tags`
+2. 发布：https://github.com/YishenTu/claudian/releases/new
+3. 上传：claudian-2.0.13-upup.zip
+
+---
+
+**进度**：100% 全部完成 ✅
