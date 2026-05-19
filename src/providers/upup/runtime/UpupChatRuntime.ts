@@ -129,6 +129,46 @@ interface ServerEvent {
   [key: string]: unknown;
 }
 
+// ============ RpcTransport for SDK Integration ============
+
+interface RpcTransport {
+  request(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  send(message: object): Promise<void>;
+}
+
+// ============ Session Manager Types (for SDK integration) ============
+
+interface SessionInfo {
+  id: string;
+  conversationId: string;
+  status: 'active' | 'paused' | 'completed' | 'created';
+  createdAt: Date;
+  lastActiveAt: Date;
+  messageCount: number;
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+interface SessionMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+  }>;
+  toolResults?: Array<{
+    toolCallId: string;
+    result: unknown;
+  }>;
+}
+
 // ============ UpupTransport ============
 
 class UpupTransport {
@@ -262,6 +302,24 @@ class UpupTransport {
     });
   }
 
+  /**
+   * Send a notification without expecting a response
+   */
+  send(msg: JsonRpcRequest | object): void {
+    if (!this.proc?.stdin) {
+      console.error('[UpupTransport] Cannot send: process not running');
+      return;
+    }
+
+    try {
+      // Handle both JsonRpcRequest and plain objects
+      const jsonMsg = 'jsonrpc' in msg ? msg : { jsonrpc: '2.0', id: Date.now(), ...msg };
+      this.proc.stdin!.write(JSON.stringify(jsonMsg) + '\n');
+    } catch (err) {
+      console.error('[UpupTransport] Failed to send:', err);
+    }
+  }
+
   private handleMessage(msg: JsonRpcResponse | JsonRpcNotification): void {
     // Response
     if ('id' in msg && msg.id !== undefined) {
@@ -306,7 +364,7 @@ class UpupTransport {
     }
   }
 
-  async *streamRun(params: { messages: Array<{ role: string; content: string }>; model?: string }): AsyncGenerator<ServerEvent> {
+  async *streamRun(params: { messages: Array<{ role: string; content: string }>; model?: string; sessionId?: string | null }): AsyncGenerator<ServerEvent> {
     // Extract prompt from messages
     const prompt = params.messages.find(m => m.role === 'user')?.content || 'Hello';
 
@@ -361,7 +419,11 @@ class UpupTransport {
 
     // Send stream request AFTER registering handlers
     try {
-      await this.request('stream', { prompt, model: params.model }) as { runId: string; status: string };
+      await this.request('stream', {
+        prompt,
+        model: params.model,
+        sessionId: params.sessionId,
+      }) as { runId: string; status: string };
     } catch (err) {
       this.off('event', eventHandler);
       this.off('stream_done', doneHandler);
@@ -490,6 +552,23 @@ function transformServerEvent(event: ServerEvent, streamState: { currentToolId: 
 
 // ============ UpupChatRuntime ============
 
+// SDK Session Manager type (lazy loaded)
+type SDKSessionManager = {
+  create(config?: { id?: string; metadata?: Record<string, unknown> }): Promise<SessionInfo>;
+  resume(sessionId: string): Promise<void>;
+  fetchMessages(sessionId: string): Promise<SessionMessage[]>;
+  updateState(state: 'running' | 'waiting' | 'completed'): Promise<void>;
+  close(): Promise<void>;
+  getSessionId(): string | null;
+  getCurrentSession(): SessionInfo | null;
+  addMessage(message: SessionMessage): void;
+  getMessages(): SessionMessage[];
+  updateTokenUsage(usage: { inputTokens: number; outputTokens: number; totalTokens: number }): void;
+};
+
+// Type for SDK UpupSessionManager constructor
+type SDKUpupSessionManagerClass = new (config: { transport: RpcTransport; metadata?: Record<string, unknown> }) => SDKSessionManager;
+
 export class UpupChatRuntime implements ChatRuntime {
   readonly providerId = 'upup' as const;
   private transport: UpupTransport | null = null;
@@ -499,6 +578,11 @@ export class UpupChatRuntime implements ChatRuntime {
   private vaultToolHandler: VaultToolHandler | null = null;
   private vaultWatcher: VaultWatcher | null = null;
   private rewindService: UpupRewindService | null = null;
+  private approvalCallback: ApprovalCallback | null = null;
+
+  // SDK Session Manager integration (Phase 1)
+  private sdkSessionManager: SDKSessionManager | null = null;
+  private sdkSessionManagerClass: SDKUpupSessionManagerClass | null = null;
 
   constructor(private plugin: ClaudianPlugin) {
     // Initialize rewind service
@@ -600,6 +684,9 @@ export class UpupChatRuntime implements ChatRuntime {
 
           // Initialize vault handlers
           this.initVaultHandlers();
+
+          // Phase 1: Initialize SDK Session Manager
+          await this.initSdkSessionManager();
         } else {
           console.log('[UpupChatRuntime] reusing existing transport');
           this.readyState = true;
@@ -641,6 +728,187 @@ export class UpupChatRuntime implements ChatRuntime {
     }
   }
 
+  /**
+   * Phase 1: Initialize SDK Session Manager
+   *
+   * Integrates with SDK's UpupSessionManager via IPC to upup core
+   */
+  private async initSdkSessionManager(): Promise<void> {
+    if (!this.transport || !this.transport.connected) {
+      console.log('[UpupChatRuntime] Cannot init SDK session manager: transport not connected');
+      return;
+    }
+
+    // Lazy load SDK Session Manager
+    if (!this.sdkSessionManagerClass) {
+      try {
+        // Try to dynamically load UpupSessionManager from SDK
+        // The SDK may export it from the main entry or session subpath
+        const sdkModule = await import('@upup/sdk');
+
+        // Check if SDK has the session-related exports
+        // UpClient from SDK v4 has .upupSession property
+        if ('UpClient' in sdkModule || (sdkModule as any).default?.UpClient) {
+          console.log('[UpupChatRuntime] SDK UpClient available - can use UpupSessionManager');
+          // Note: SDK's UpupSessionManager is available via UpClient.upupSession
+          // For now, we use local implementation
+          console.log('[UpupChatRuntime] Using local session management (SDK integration deferred)');
+          return;
+        }
+
+        // Check for direct session exports
+        const hasSessionExport = 'SessionManager' in sdkModule || (sdkModule as any).SessionManager;
+        if (hasSessionExport) {
+          console.log('[UpupChatRuntime] SDK SessionManager found');
+        }
+
+        console.log('[UpupChatRuntime] SDK does not have UpupSessionManager, using local implementation');
+      } catch (err) {
+        console.log('[UpupChatRuntime] Failed to load SDK, using local session management:', err);
+      }
+      return;
+    }
+
+    if (!this.sdkSessionManager) {
+      if (!this.transport) return;
+
+      const vaultPath = getVaultPath(this.plugin.app) ?? process.cwd();
+
+      // Create RpcTransport adapter
+      const rpcTransport: RpcTransport = {
+        request: (method, params) => this.transport!.request(method, params),
+        send: async (msg) => {
+          // Convert to JSON-RPC notification if needed
+          const jsonMsg = msg as { method?: string; params?: unknown };
+          if (jsonMsg.method) {
+            // Send as JSON-RPC notification
+            this.transport!.send(msg as JsonRpcRequest);
+          }
+        },
+      };
+
+      // Create SDK Session Manager
+      this.sdkSessionManager = new this.sdkSessionManagerClass({
+        transport: rpcTransport,
+        metadata: {
+          projectSlug: 'claudian',
+          projectPath: vaultPath,
+        },
+      });
+
+      console.log('[UpupChatRuntime] SDK Session Manager initialized');
+
+      // Create or resume session
+      await this.createOrResumeSession();
+    }
+  }
+
+  /**
+   * Create or resume SDK session
+   */
+  private async createOrResumeSession(): Promise<void> {
+    if (!this.sdkSessionManager) return;
+
+    try {
+      // Try to resume existing session
+      if (this.sessionId) {
+        try {
+          await this.sdkSessionManager.resume(this.sessionId);
+          console.log('[UpupChatRuntime] Resumed SDK session:', this.sessionId);
+          return;
+        } catch {
+          console.log('[UpupChatRuntime] Failed to resume session, creating new one');
+        }
+      }
+
+      // Create new session
+      const session = await this.sdkSessionManager.create({
+        metadata: {
+          conversationId: this.sessionId,
+          createdBy: 'claudian',
+        },
+      });
+
+      this.sessionId = session.id;
+      console.log('[UpupChatRuntime] Created new SDK session:', session.id);
+    } catch (err) {
+      console.error('[UpupChatRuntime] Failed to create SDK session:', err);
+    }
+  }
+
+  /**
+   * Get RPC transport for SDK
+   */
+  private getRpcTransport(): RpcTransport {
+    return {
+      request: (method, params) => this.transport!.request(method, params),
+      send: async (msg) => {
+        this.transport!.send(msg as JsonRpcRequest);
+      },
+    };
+  }
+
+  /**
+   * Phase 1: Sync stream event to SDK Session Manager
+   */
+  private syncEventToSdkSession(event: ServerEvent): void {
+    if (!this.sdkSessionManager) return;
+
+    switch (event.type) {
+      case 'stream_progress':
+        // Sync text content
+        this.sdkSessionManager.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'assistant',
+          content: (event as { content?: string }).content ?? '',
+          timestamp: new Date(),
+        });
+        break;
+
+      case 'done':
+        // Update token usage
+        if (event.tokenUsage) {
+          const usage = event.tokenUsage as { input: number; output: number };
+          this.sdkSessionManager.updateTokenUsage({
+            inputTokens: usage.input,
+            outputTokens: usage.output,
+            totalTokens: usage.input + usage.output,
+          });
+        }
+        break;
+
+      case 'tool_use':
+      case 'tool_start':
+        // Sync tool call
+        this.sdkSessionManager.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          toolCalls: [{
+            id: String(event.toolCallId),
+            name: String(event.tool || event.toolName),
+            input: (event.args || {}) as Record<string, unknown>,
+          }],
+        });
+        break;
+
+      case 'tool_result':
+        // Sync tool result
+        this.sdkSessionManager.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'system',
+          content: '',
+          timestamp: new Date(),
+          toolResults: [{
+            toolCallId: String(event.toolCallId),
+            result: event.result,
+          }],
+        });
+        break;
+    }
+  }
+
   async forceRestart(): Promise<boolean> {
     console.log('[UpupChatRuntime] Force restarting upup...');
     return this.attemptConnection({ force: true });
@@ -663,6 +931,10 @@ export class UpupChatRuntime implements ChatRuntime {
     const settings = getUpupProviderSettings(this.plugin.settings);
     const model = queryOptions?.model ?? settings.model;
 
+    // Phase 1: Get sessionId from SDK Session Manager
+    const sessionId = this.sdkSessionManager?.getSessionId() ?? this.sessionId;
+    console.log('[UpupChatRuntime] query sessionId:', sessionId);
+
     // Get conversation ID from query options or generate new one
     const conversationId = (queryOptions as { conversationId?: string })?.conversationId ?? `conv-${Date.now()}`;
 
@@ -672,7 +944,7 @@ export class UpupChatRuntime implements ChatRuntime {
     // Add user message to session
     sessionMgr.addUserMessage(turn.prompt);
 
-    console.log('[UpupChatRuntime] query:', { model, conversationId, prompt: turn.prompt.slice(0, 50) });
+    console.log('[UpupChatRuntime] query:', { model, conversationId, sessionId, prompt: turn.prompt.slice(0, 50) });
 
     // Get history for context
     const history = sessionMgr.getHistory();
@@ -694,9 +966,58 @@ export class UpupChatRuntime implements ChatRuntime {
         accumulatedText: '',
       };
 
-      for await (const event of this.transport!.streamRun({ messages, model })) {
+      // Phase 1: Pass sessionId to transport
+      for await (const event of this.transport!.streamRun({
+        messages,
+        model,
+        sessionId // Pass sessionId for upup core session association
+      })) {
         eventCount++;
         console.log('[UpupChatRuntime] event:', event.type, '|', JSON.stringify(event).slice(0, 200));
+
+        // Phase 1: Sync event to SDK Session Manager
+        this.syncEventToSdkSession(event);
+
+        // Handle tool approval requests (for write_file, edit_file etc.)
+        // Auto-approve vault tools regardless of approvalCallback state
+        if (event.type === 'tool_approval') {
+          const toolName = String(event.tool || '');
+          
+          console.log('[UpupChatRuntime] tool approval requested:', toolName);
+          
+          // Auto-approve vault tools (write_file, read_file, etc.)
+          if (this.vaultToolHandler?.isVaultTool(toolName)) {
+            console.log('[UpupChatRuntime] auto-approving vault tool:', toolName);
+            this.transport?.send({
+              jsonrpc: '2.0',
+              method: 'tool/approve',
+              params: { tool: toolName, approved: true },
+            });
+            continue;
+          }
+          
+          // For non-vault tools, call approval callback if set
+          if (this.approvalCallback) {
+            const args = (event.args || {}) as Record<string, unknown>;
+            const description = `Approval requested for ${toolName}`;
+            const decision = await this.approvalCallback(toolName, args, description);
+            console.log('[UpupChatRuntime] approval decision:', decision);
+
+            // Check decision - 'allow' or 'allow-always' means approve
+            const shouldApprove =
+              decision === 'allow' ||
+              (typeof decision === 'object' && decision.type === 'select-option' && decision.value === 'allow');
+
+            if (shouldApprove) {
+              this.transport?.send({
+                jsonrpc: '2.0',
+                method: 'tool/approve',
+                params: { tool: toolName, approved: true },
+              });
+            }
+          }
+          continue;
+        }
 
         // Handle vault tool interception
         if (event.type === 'tool_start' && this.vaultToolHandler) {
@@ -835,7 +1156,9 @@ export class UpupChatRuntime implements ChatRuntime {
     return this.rewindService.executeRewind(userMessageId);
   }
 
-  setApprovalCallback(_callback: ApprovalCallback | null): void {}
+  setApprovalCallback(callback: ApprovalCallback | null): void {
+    this.approvalCallback = callback;
+  }
   setApprovalDismisser(_dismisser: (() => void) | null): void {}
   setAskUserQuestionCallback(_callback: AskUserQuestionCallback | null): void {}
   setExitPlanModeCallback(_callback: ExitPlanModeCallback | null): void {}

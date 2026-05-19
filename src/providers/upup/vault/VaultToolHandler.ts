@@ -10,7 +10,7 @@ import type ClaudianPlugin from '../../../main';
 
 // ============ Types ============
 
-export type VaultToolName = 'file_read' | 'file_write' | 'dir_read' | 'glob_search' | 'get_links' | 'get_tags';
+export type VaultToolName = 'file_read' | 'file_write' | 'read_file' | 'write_file' | 'dir_read' | 'glob_search' | 'get_links' | 'get_tags';
 
 export interface VaultToolResult {
   success: boolean;
@@ -30,9 +30,12 @@ export interface TagInfo {
 // ============ VaultToolHandler ============
 
 export class VaultToolHandler {
+  // Both naming conventions: file_write (upup bundled agent) and file_write (standard)
   private readonly vaultTools = new Set<VaultToolName>([
     'file_read',
     'file_write',
+    'read_file',
+    'write_file',
     'dir_read',
     'glob_search',
     'get_links',
@@ -61,8 +64,10 @@ export class VaultToolHandler {
   async handleTool(toolName: VaultToolName, args: Record<string, unknown>): Promise<VaultToolResult> {
     switch (toolName) {
       case 'file_read':
+      case 'read_file':
         return this.readFile(args);
       case 'file_write':
+      case 'write_file':
         return this.writeFile(args);
       case 'dir_read':
         return this.readDir(args);

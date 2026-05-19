@@ -9,7 +9,7 @@ import type { VaultToolName } from '../../../../../src/providers/upup/vault/Vaul
 import { VaultToolHandler } from '../../../../../src/providers/upup/vault/VaultToolHandler';
 
 // Create mock classes that inherit from obsidian TFile/TFolder for instanceof compatibility
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const MockTFile = TFile as any;
 const MockTFolder = TFolder as any;
 

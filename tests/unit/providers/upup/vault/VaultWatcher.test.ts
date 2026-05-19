@@ -14,7 +14,7 @@ interface MockEventRef {
 }
 
 // Mock TFile for proper instanceof checks
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const MockTFile = TFile as any;
 function createMockTFile(path: string) {
   const file = new MockTFile();
